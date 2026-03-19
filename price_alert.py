@@ -4,6 +4,7 @@ Sends independent email alerts via Gmail when any asset drops >1% from previous 
 """
 
 import yfinance as yf
+import pandas as pd
 import smtplib
 import os
 from email.mime.text import MIMEText
@@ -32,10 +33,8 @@ def send_email(subject: str, body: str) -> bool:
         msg["From"]    = GMAIL_SENDER
         msg["To"]      = ALERT_RECEIVER
 
-        # Plain text version
         text_part = MIMEText(body, "plain")
 
-        # HTML version (nicer formatting in email clients)
         html_body = body.replace("\n", "<br>")
         html_part = MIMEText(
             f"""
@@ -78,6 +77,10 @@ def check_asset(name: str, ticker: str) -> dict | None:
     try:
         data = yf.download(ticker, period="5d", interval="1d", progress=False, auto_adjust=True)
 
+        # Newer yfinance versions return a multi-level column index — flatten it
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
+
         if len(data) < 2:
             print(f"  [{name}] Not enough data (got {len(data)} rows)")
             return None
@@ -107,11 +110,11 @@ def format_alert(result: dict) -> tuple[str, str]:
     """Returns (subject, body) for the alert email."""
     subject = f"🔴 Price Drop Alert: {result['name']} dropped {result['pct_change']:.2f}%"
     body = (
-        f"Asset    : {result['name']} ({result['ticker']})\n"
+        f"Asset     : {result['name']} ({result['ticker']})\n"
         f"Prev close: {result['prev_close']:.2f}\n"
-        f"Current  : {result['curr_price']:.2f}\n"
-        f"Drop     : {result['pct_change']:.2f}%\n"
-        f"Time     : {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+        f"Current   : {result['curr_price']:.2f}\n"
+        f"Drop      : {result['pct_change']:.2f}%\n"
+        f"Time      : {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
     )
     return subject, body
 
